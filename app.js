@@ -18,7 +18,8 @@
     shuffle: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`,
   };
   let viewingDate  = null;
-  let activeTab    = 'chart'; // 'chart' | 'liked'
+  let activeTab    = 'chart'; // 'chart' | 'liked' | 'search'
+  let searchData   = [];
 
   // likedSongs: Map<"title|artist", { title, artist, cover, album }>
   let likedSongs = new Map(JSON.parse(localStorage.getItem('kc_liked2') || '[]'));
@@ -60,6 +61,11 @@
   const themeBtn       = document.getElementById('themeBtn');
   const tabChart       = document.getElementById('tabChart');
   const tabLiked       = document.getElementById('tabLiked');
+  const tabSearch      = document.getElementById('tabSearch');
+  const melonSearchBox = document.getElementById('melonSearchBox');
+  const melonSearchBtn = document.getElementById('melonSearchBtn');
+  const searchList     = document.getElementById('searchList');
+  const searchUpdated  = document.getElementById('searchUpdated');
   const downloadBtn    = document.getElementById('downloadBtn');
   const lyricsBtn      = document.getElementById('lyricsBtn');
   const lyricsPanel    = document.getElementById('lyricsPanel');
@@ -128,11 +134,17 @@
       document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
       btn.classList.add('active');
       activeTab = btn.dataset.tab;
-      tabChart.style.display = activeTab === 'chart' ? '' : 'none';
-      tabLiked.style.display = activeTab === 'liked' ? '' : 'none';
-      if (activeTab === 'liked') renderLikedTab();
+      tabChart.style.display  = activeTab === 'chart'  ? '' : 'none';
+      tabLiked.style.display  = activeTab === 'liked'  ? '' : 'none';
+      tabSearch.style.display = activeTab === 'search' ? '' : 'none';
+      if (activeTab === 'liked')  renderLikedTab();
+      if (activeTab === 'search') melonSearchBox.focus();
     });
   });
+
+  // ── Search tab buttons ──
+  melonSearchBtn.addEventListener('click', runMelonSearch);
+  melonSearchBox.addEventListener('keydown', e => { if (e.key === 'Enter') runMelonSearch(); });
 
   // ── Chart tab buttons ──
   refreshBtn.addEventListener('click', () => {
@@ -378,10 +390,6 @@
       });
 
       div.addEventListener('click', () => {
-        // 차트 목록에 해당 곡이 있으면 그 위치에서 재생
-        const chartIdx = filteredData.findIndex(s => `${s.title}|${s.artist}` === key);
-        if (chartIdx >= 0) { playChartAt(chartIdx); return; }
-        // 없으면 좋아요 목록 기준으로 재생
         playLikedAt([...likedSongs.values()], i);
       });
 
@@ -406,12 +414,13 @@
   // ════════════════════════════════════
 
   function renderCurrentList() {
-    if (activeTab === 'chart') renderChartList();
-    else renderLikedTab();
+    if (activeTab === 'chart')  renderChartList();
+    else if (activeTab === 'liked')  renderLikedTab();
+    else if (activeTab === 'search') renderSearchList();
   }
 
   function updateActiveItem() {
-    const list = activeTab === 'chart' ? chartList : likedListEl;
+    const list = activeTab === 'chart' ? chartList : activeTab === 'search' ? searchList : likedListEl;
     list.querySelectorAll('.chart-item').forEach((el, i) => {
       const song = filteredData[i];
       if (!song) return;
@@ -432,7 +441,7 @@
     isPlaying    = true;
 
     const song = filteredData[idx];
-    playerThumb.src          = song.cover || '';
+    playerThumb.src = song.cover || '';
     playerThumb.alt          = song.title;
     playerTitle.textContent  = song.title;
     playerArtist.textContent = song.artist;
@@ -544,7 +553,7 @@
       likeBtn.classList.toggle('liked', liked);
     }
     // 해당 아이템의 하트만 교체 — 전체 리스트 재렌더 없이
-    const items = (activeTab === 'chart' ? chartList : likedListEl).querySelectorAll('.chart-item');
+    const items = (activeTab === 'chart' ? chartList : activeTab === 'search' ? searchList : likedListEl).querySelectorAll('.chart-item');
     const item = items[idx];
     if (item) {
       const icon = item.querySelector('.like-icon');
@@ -554,6 +563,84 @@
       }
     }
     updateLikedCount();
+  }
+
+  // ════════════════════════════════════
+  // Search tab
+  // ════════════════════════════════════
+
+  async function runMelonSearch() {
+    const q = melonSearchBox.value.trim();
+    if (!q) return;
+    showLoading(searchList);
+    searchUpdated.textContent = `"${q}" 검색 중...`;
+    try {
+      const res  = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      searchData = json.data || [];
+      searchUpdated.textContent = searchData.length > 0 ? `${searchData.length}곡 검색됨` : '결과 없음';
+      filteredData = searchData;
+      renderSearchList();
+    } catch (e) {
+      showError(searchList, e.message);
+      searchUpdated.textContent = '오류';
+    }
+  }
+
+  function renderSearchList() {
+    searchList.innerHTML = '';
+    if (searchData.length === 0) {
+      searchList.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>검색어를 입력하세요.</p></div>`;
+      return;
+    }
+    searchData.forEach((song, idx) => searchList.appendChild(createSearchItem(song, idx)));
+  }
+
+  function createSearchItem(song, idx) {
+    const div = document.createElement('div');
+    const isCurrentSong = currentIndex >= 0 && activeTab === 'search' &&
+      filteredData[currentIndex]?.title === song.title &&
+      filteredData[currentIndex]?.artist === song.artist;
+    div.className = 'chart-item' + (isCurrentSong ? ' active' : '');
+    div.style.animationDelay = `${Math.min(idx * 20, 400)}ms`;
+
+    const liked    = likedSongs.has(`${song.title}|${song.artist}`);
+    const coverSrc = song.cover || `https://picsum.photos/seed/s${idx}/80/80`;
+    song.displayCover = coverSrc;
+
+    div.innerHTML = `
+      <div class="rank-wrap">
+        <div class="rank-num" style="font-size:0.9rem;color:var(--text-muted)">${idx + 1}</div>
+      </div>
+      <div class="cover-wrap">
+        <img class="cover-img" src="${coverSrc}" alt="${escHtml(song.title)}" loading="lazy"
+             onerror="this.src='https://picsum.photos/seed/sx${idx}/80/80'" />
+        <div class="play-overlay">${isCurrentSong && isPlaying ? '⏸' : '▶'}</div>
+      </div>
+      <div class="song-info">
+        <div class="song-title">${escHtml(song.title)}</div>
+        <div class="song-artist">${escHtml(song.artist)}</div>
+        <div class="song-meta"><span class="album-name">${escHtml(song.album)}</span></div>
+      </div>
+      <div class="song-actions">
+        <button class="like-icon${liked ? ' liked' : ''}" title="좋아요">${liked ? HEART_FILLED : HEART_EMPTY}</button>
+        ${song.songId ? `<a class="melon-link" href="https://www.melon.com/song/detail.htm?songId=${song.songId}" target="_blank">🔗</a>` : ''}
+      </div>`;
+
+    div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); filteredData = searchData; toggleLike(idx); });
+    div.addEventListener('click', e => {
+      if (e.target.closest('.melon-link')) return;
+      filteredData = searchData;
+      // 리스트에 실제 표시된 img src를 cover로 덮어씀
+      const imgEl = div.querySelector('.cover-img');
+      if (imgEl && imgEl.src) song.cover = imgEl.src;
+      const isCurrent = currentIndex >= 0 &&
+        filteredData[currentIndex]?.title === song.title &&
+        filteredData[currentIndex]?.artist === song.artist;
+      isCurrent ? togglePlay() : playChartAt(idx);
+    });
+    return div;
   }
 
   // ════════════════════════════════════

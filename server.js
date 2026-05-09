@@ -208,6 +208,23 @@ async function preloadFromR2() {
 
 // ── Routes ──
 
+app.get('/api/cover', async (req, res) => {
+  const { url } = req.query;
+  if (!url || !url.startsWith('https://cdnimg.melon.co.kr/')) return res.status(400).end();
+  try {
+    const r = await axios.get(url, {
+      responseType: 'arraybuffer',
+      headers: { ...HEADERS },
+      timeout: 8000,
+    });
+    res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(r.data));
+  } catch (e) {
+    res.status(502).end();
+  }
+});
+
 app.get('/api/download', async (req, res) => {
   const { title, artist, songId } = req.query;
   if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
@@ -416,6 +433,41 @@ app.get('/api/stream', async (req, res) => {
   } catch (e) {
     console.error('[stream proxy]', e.message);
     if (!res.headersSent) res.status(502).json({ error: e.message });
+  }
+});
+
+function melonAlbumCover(albumId) {
+  const padded = String(albumId).padStart(8, '0');
+  return `https://cdnimg.melon.co.kr/cm2/album/images/${padded.slice(0,3)}/${padded.slice(3,5)}/${padded.slice(5,8)}/${albumId}_500.jpg`;
+}
+
+app.get('/api/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q || !q.trim()) return res.status(400).json({ error: 'q 필요' });
+  try {
+    const r = await axios.get('https://www.melon.com/search/song/index.htm', {
+      params: { q: q.trim() },
+      headers: HEADERS,
+      timeout: 12000,
+    });
+    const $ = cheerio.load(r.data);
+    const songs = [];
+    $('tbody tr').each((i, el) => {
+      const row    = $(el);
+      const tds    = row.find('td');
+      const html   = row.html() || '';
+      const songId = row.find('input[name="input_check"]').attr('value') || '';
+      const albumMatch = html.match(/goAlbumDetail\(['"](\d+)['"]\)/);
+      const cover  = albumMatch ? melonAlbumCover(albumMatch[1]) : '';
+      const title  = tds.eq(2).find('a').eq(1).text().trim() || tds.eq(2).find('a').first().text().trim();
+      const artist = tds.eq(3).find('a').first().text().trim();
+      const album  = tds.eq(4).find('a').first().text().trim();
+      if (title && artist) songs.push({ rank: i + 1, title, artist, album, cover, songId, isNew: false, prevRank: i + 1 });
+    });
+    res.json({ data: songs });
+  } catch (e) {
+    console.error('[search]', e.message);
+    res.status(502).json({ error: e.message });
   }
 });
 
