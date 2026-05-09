@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>한국 음악 차트</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <h1 class="logo">🎵 K-Chart</h1>
+
+      <!-- 중앙 탭 -->
+      <nav class="main-tabs">
+        <button class="main-tab active" data-tab="chart">차트</button>
+        <button class="main-tab" data-tab="liked">
+          좋아요
+          <span class="liked-count" id="likedCount"></span>
+        </button>
+      </nav>
+
+      <div class="header-right">
+        <div class="service-badges">
+          <span class="svc-badge" title="차트 데이터: 멜론">
+            <img src="https://cdnimg.melon.co.kr/resource/image/web/common/logo_melon142x99.png" alt="Melon" class="svc-logo" />
+            <span class="svc-label">차트</span>
+          </span>
+          <span class="svc-sep">+</span>
+          <span class="svc-badge" title="음원 재생: YouTube">
+            <svg class="svc-logo svc-svg" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8z"/><polygon fill="#fff" points="9.75,15.02 15.5,12 9.75,8.98"/></svg>
+            <span class="svc-label">재생</span>
+          </span>
+          <span class="svc-sep">+</span>
+          <span class="svc-badge" title="데이터 저장: Cloudflare R2">
+            <svg class="svc-logo svc-svg" viewBox="0 0 24 24" fill="#F6821F"><path d="M16.5 8.25A4.5 4.5 0 0 0 8.1 7.5H7.5A3 3 0 0 0 7.5 13.5h9a2.25 2.25 0 0 0 0-4.5z"/></svg>
+            <span class="svc-label">캐싱</span>
+          </span>
+        </div>
+        <button class="theme-btn" id="themeBtn" title="라이트/다크 모드"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── 차트 탭 ── -->
+    <div id="tabChart">
+      <section class="chart-header">
+        <div class="chart-title-wrap">
+          <span class="chart-icon" id="chartIcon">🍈</span>
+          <div>
+            <h2 class="chart-name" id="chartName">멜론 TOP 100</h2>
+            <p class="chart-updated" id="chartUpdated"></p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="refresh-btn" id="refreshBtn">
+            <span class="refresh-icon">↻</span> 새로고침
+          </button>
+          <button class="history-btn" id="historyBtn">
+            <i data-lucide="calendar" width="14" height="14"></i>
+            날짜별 보기
+          </button>
+        </div>
+      </section>
+
+      <div class="history-panel" id="historyPanel" style="display:none">
+        <div class="history-header">
+          <span class="history-title">저장된 차트 기록</span>
+          <button class="history-close" id="historyClose">✕</button>
+        </div>
+        <div class="history-dates" id="historyDates"></div>
+      </div>
+
+      <div class="controls">
+        <input class="search-box" id="searchBox" type="text" placeholder="곡명 또는 아티스트 검색..." />
+      </div>
+
+      <div class="chart-list" id="chartList"></div>
+    </div>
+
+    <!-- ── 좋아요 탭 ── -->
+    <div id="tabLiked" style="display:none">
+      <section class="chart-header">
+        <div class="chart-title-wrap">
+          <span class="chart-icon">❤️</span>
+          <div>
+            <h2 class="chart-name">좋아요 목록</h2>
+            <p class="chart-updated" id="likedUpdated"></p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="liked-play-all" id="likedPlayAll">
+            <i data-lucide="play" width="12" height="12"></i>
+            전체 재생
+          </button>
+          <button class="liked-clear" id="likedClear">전체 삭제</button>
+        </div>
+      </section>
+
+      <div class="controls">
+        <input class="search-box" id="likedSearchBox" type="text" placeholder="좋아요 목록에서 검색..." />
+      </div>
+
+      <div class="chart-list" id="likedList"></div>
+    </div>
+
+  </main>
+
+  <div class="player-bar" id="playerBar">
+    <div class="loading-bar" id="loadingBar"></div>
+
+    <div class="player-info">
+      <div class="player-thumb-wrap">
+        <img class="player-thumb" id="playerThumb" src="" alt="" />
+      </div>
+      <div class="player-text">
+        <span class="player-title" id="playerTitle">곡을 선택하세요</span>
+        <span class="player-artist" id="playerArtist">-</span>
+        <span class="player-yt-info" id="playerYtInfo"></span>
+      </div>
+    </div>
+
+    <div class="player-controls">
+      <button class="ctrl-btn" id="prevBtn">⏮</button>
+      <button class="ctrl-btn play-btn" id="playBtn">▶</button>
+      <button class="ctrl-btn" id="nextBtn">⏭</button>
+      <button class="ctrl-btn play-mode-btn" id="playModeBtn" title="재생 모드"></button>
+    </div>
+
+    <div class="player-progress">
+      <span class="time" id="currentTime">0:00</span>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span class="time" id="totalTime">0:00</span>
+    </div>
+
+    <div class="player-extra">
+      <button class="ctrl-btn like-btn" id="likeBtn">🤍</button>
+      <div class="volume-wrap">
+        🔊
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70" />
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

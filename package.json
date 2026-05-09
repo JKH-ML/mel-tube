@@ -1,0 +1,21 @@
+{
+  "name": "mel-tube",
+  "version": "1.0.0",
+  "description": "멜론 TOP 100 차트를 유튜브 오디오로 재생하는 로컬 웹앱",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["melon", "kpop", "chart", "youtube", "music"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
+    "axios": "^1.16.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "yt-dlp-wrap": "^2.3.12"
+  }
+}
