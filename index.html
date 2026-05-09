@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>한국 음악 차트</title>
+  <title>MelTube</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
@@ -19,6 +19,7 @@
           좋아요
           <span class="liked-count" id="likedCount"></span>
         </button>
+        <button class="main-tab" data-tab="bugs">검색</button>
       </nav>
 
       <div class="header-right">
@@ -89,6 +90,26 @@
       </div>
 
       <div class="chart-list" id="likedList"></div>
+    </div>
+
+    <!-- ── 벅스 검색 탭 ── -->
+    <div id="tabBugs" style="display:none">
+      <section class="chart-header">
+        <div class="chart-title-wrap">
+          <span class="chart-icon">🔍</span>
+          <div>
+            <h2 class="chart-name">검색</h2>
+            <p class="chart-updated" id="bugsSearchUpdated"></p>
+          </div>
+        </div>
+      </section>
+
+      <div class="controls">
+        <input class="search-box" id="bugsSearchBox" type="text" placeholder="곡명 또는 아티스트를 입력하세요..." />
+        <button class="refresh-btn" id="bugsSearchBtn">검색</button>
+      </div>
+
+      <div class="chart-list" id="bugsList"></div>
     </div>
 
   </main>

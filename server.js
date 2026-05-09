@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 const YTDlpWrap = require('yt-dlp-wrap').default;
+const NodeID3 = require('node-id3');
 const r2 = require('./r2');
 
 const ytDlp = new YTDlpWrap(path.join(__dirname, 'yt-dlp.exe'));
@@ -226,7 +227,7 @@ app.get('/api/cover', async (req, res) => {
 });
 
 app.get('/api/download', async (req, res) => {
-  const { title, artist, songId } = req.query;
+  const { title, artist, songId, cover } = req.query;
   if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
 
   const key = `${title}|${artist}`;
@@ -249,21 +250,39 @@ app.get('/api/download', async (req, res) => {
     return res.status(502).json({ error: e.message });
   }
 
-  // 멜론 썸네일 / 가사 병렬 fetch
+  let thumbUrl;
+
+  // 멜론 songId가 있을 때만 멜론 썸네일/가사 fetch, cover 파라미터가 있으면(벅스) 멜론 검색으로 가사만 가져옴
   const [melonCover, melonLyric] = await Promise.allSettled([
-    songId ? axios.get(`https://www.melon.com/song/detail.htm?songId=${songId}`, { headers: HEADERS, timeout: 5000 })
+    (!cover && songId) ? axios.get(`https://www.melon.com/song/detail.htm?songId=${songId}`, { headers: HEADERS, timeout: 5000 })
       .then(r => {
         const match = r.data.match(/cdnimg[^"']*_500\.jpg/);
         return match ? `https://${match[0]}` : null;
       }) : Promise.resolve(null),
-    songId ? axios.get('https://www.melon.com/song/lyricInfo.json', {
+    (!cover && songId) ? axios.get('https://www.melon.com/song/lyricInfo.json', {
       params: { songId },
       headers: { ...HEADERS, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}` },
       timeout: 5000,
-    }).then(r => r.data?.lyric?.replace(/<BR>/gi, '\n') || null) : Promise.resolve(null),
+    }).then(r => r.data?.lyric?.replace(/<BR>/gi, '\n') || null)
+    : cover ? axios.get('https://www.melon.com/search/song/index.htm', {
+        params: { q: `${title} ${artist}` },
+        headers: HEADERS,
+        timeout: 10000,
+      }).then(async r => {
+        const $s = cheerio.load(r.data);
+        let sid = null;
+        $s('tbody tr').each((i, el) => { if (!sid) { const v = $s(el).find('input[name="input_check"]').attr('value'); if (v) sid = v; } });
+        if (!sid) return null;
+        const lr = await axios.get('https://www.melon.com/song/lyricInfo.json', {
+          params: { songId: sid },
+          headers: { ...HEADERS, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://www.melon.com/song/detail.htm?songId=${sid}` },
+          timeout: 8000,
+        });
+        return lr.data?.lyric?.replace(/<BR>/gi, '\n') || null;
+      }) : Promise.resolve(null),
   ]);
 
-  const thumbUrl = melonCover.value || coverUrl;
+  thumbUrl = cover || melonCover.value || coverUrl;
   lyric = melonLyric.value || '';
 
   // 썸네일을 임시 파일로 저장
@@ -296,7 +315,6 @@ app.get('/api/download', async (req, res) => {
     '-id3v2_version', '3',
     '-metadata', `title=${title}`,
     '-metadata', `artist=${artist}`,
-    '-metadata', `USLT=${lyric}`,
     outPath,
   );
 
@@ -311,11 +329,52 @@ app.get('/api/download', async (req, res) => {
       if (!res.headersSent) res.status(500).end();
       return;
     }
+    // node-id3로 USLT 가사 프레임 삽입
+    if (lyric) {
+      NodeID3.update({
+        unsynchronisedLyrics: { language: 'kor', shortText: '', text: lyric },
+      }, outPath);
+    }
     const stream = fs.createReadStream(outPath);
     stream.pipe(res);
     stream.on('close', () => fs.unlink(outPath, () => {}));
   });
   req.on('close', () => ff.kill());
+});
+
+app.get('/api/bugs-lyrics', async (req, res) => {
+  const { title, artist } = req.query;
+  if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
+  try {
+    const searchRes = await axios.get('https://www.melon.com/search/song/index.htm', {
+      params: { q: `${title} ${artist}` },
+      headers: HEADERS,
+      timeout: 10000,
+    });
+    const $s = cheerio.load(searchRes.data);
+    let songId = null;
+    $s('tbody tr').each((i, el) => {
+      if (songId) return;
+      const id = $s(el).find('input[name="input_check"]').attr('value');
+      if (id) songId = id;
+    });
+    if (!songId) return res.json({ lyric: null });
+
+    const lyricRes = await axios.get('https://www.melon.com/song/lyricInfo.json', {
+      params: { songId },
+      headers: {
+        ...HEADERS,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}`,
+      },
+      timeout: 8000,
+    });
+    res.json({ lyric: lyricRes.data?.lyric || null });
+  } catch (e) {
+    console.error('[bugs-lyrics]', e.message);
+    res.status(502).json({ error: e.message });
+  }
 });
 
 app.get('/api/lyrics', async (req, res) => {
@@ -436,37 +495,36 @@ app.get('/api/stream', async (req, res) => {
   }
 });
 
-function melonAlbumCover(albumId) {
-  const padded = String(albumId).padStart(8, '0');
-  return `https://cdnimg.melon.co.kr/cm2/album/images/${padded.slice(0,3)}/${padded.slice(3,5)}/${padded.slice(5,8)}/${albumId}_500.jpg`;
-}
-
-app.get('/api/search', async (req, res) => {
+app.get('/api/bugs-search', async (req, res) => {
   const { q } = req.query;
   if (!q || !q.trim()) return res.status(400).json({ error: 'q 필요' });
   try {
-    const r = await axios.get('https://www.melon.com/search/song/index.htm', {
+    const r = await axios.get('https://music.bugs.co.kr/search/track', {
       params: { q: q.trim() },
-      headers: HEADERS,
+      headers: {
+        'User-Agent': HEADERS['User-Agent'],
+        'Accept-Language': HEADERS['Accept-Language'],
+        'Referer': 'https://music.bugs.co.kr',
+      },
       timeout: 12000,
     });
     const $ = cheerio.load(r.data);
     const songs = [];
-    $('tbody tr').each((i, el) => {
+    $('table.list tbody tr').each((i, el) => {
       const row    = $(el);
-      const tds    = row.find('td');
-      const html   = row.html() || '';
-      const songId = row.find('input[name="input_check"]').attr('value') || '';
-      const albumMatch = html.match(/goAlbumDetail\(['"](\d+)['"]\)/);
-      const cover  = albumMatch ? melonAlbumCover(albumMatch[1]) : '';
-      const title  = tds.eq(2).find('a').eq(1).text().trim() || tds.eq(2).find('a').first().text().trim();
-      const artist = tds.eq(3).find('a').first().text().trim();
-      const album  = tds.eq(4).find('a').first().text().trim();
+      const title  = row.find('p.title a').last().text().trim();
+      const artist = row.find('p.artist a').first().text().trim();
+      const albumEl = row.find('a.album').first();
+      const album  = albumEl.text().trim();
+      const trackHref = row.find('a.trackInfo').first().attr('href') || '';
+      const songId = trackHref.match(/\/track\/(\d+)/)?.[1] || '';
+      const coverEl = row.find('td img').first();
+      const cover  = coverEl.attr('src') || coverEl.attr('data-src') || '';
       if (title && artist) songs.push({ rank: i + 1, title, artist, album, cover, songId, isNew: false, prevRank: i + 1 });
     });
     res.json({ data: songs });
   } catch (e) {
-    console.error('[search]', e.message);
+    console.error('[bugs-search]', e.message);
     res.status(502).json({ error: e.message });
   }
 });

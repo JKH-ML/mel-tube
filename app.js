@@ -3,6 +3,7 @@
   let currentData  = [];
   let filteredData = [];
   let currentIndex = -1;
+  let currentSongKey = null; // "title|artist" — 탭/검색어 변경 후에도 현재 곡 식별
   let isPlaying    = false;
   // playMode: 'one' | 'all' | 'shuffle'
   let playMode     = localStorage.getItem('kc_playmode') || 'all';
@@ -18,8 +19,8 @@
     shuffle: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`,
   };
   let viewingDate  = null;
-  let activeTab    = 'chart'; // 'chart' | 'liked' | 'search'
-  let searchData   = [];
+  let activeTab    = 'chart'; // 'chart' | 'liked' | 'bugs'
+  let bugsData     = [];
 
   // likedSongs: Map<"title|artist", { title, artist, cover, album }>
   let likedSongs = new Map(JSON.parse(localStorage.getItem('kc_liked2') || '[]'));
@@ -59,13 +60,13 @@
   const likedCount     = document.getElementById('likedCount');
   const volumeSlider   = document.getElementById('volumeSlider');
   const themeBtn       = document.getElementById('themeBtn');
-  const tabChart       = document.getElementById('tabChart');
-  const tabLiked       = document.getElementById('tabLiked');
-  const tabSearch      = document.getElementById('tabSearch');
-  const melonSearchBox = document.getElementById('melonSearchBox');
-  const melonSearchBtn = document.getElementById('melonSearchBtn');
-  const searchList     = document.getElementById('searchList');
-  const searchUpdated  = document.getElementById('searchUpdated');
+  const tabChart          = document.getElementById('tabChart');
+  const tabLiked          = document.getElementById('tabLiked');
+  const tabBugs           = document.getElementById('tabBugs');
+  const bugsSearchBox     = document.getElementById('bugsSearchBox');
+  const bugsSearchBtn     = document.getElementById('bugsSearchBtn');
+  const bugsList          = document.getElementById('bugsList');
+  const bugsSearchUpdated = document.getElementById('bugsSearchUpdated');
   const downloadBtn    = document.getElementById('downloadBtn');
   const lyricsBtn      = document.getElementById('lyricsBtn');
   const lyricsPanel    = document.getElementById('lyricsPanel');
@@ -134,17 +135,17 @@
       document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
       btn.classList.add('active');
       activeTab = btn.dataset.tab;
-      tabChart.style.display  = activeTab === 'chart'  ? '' : 'none';
-      tabLiked.style.display  = activeTab === 'liked'  ? '' : 'none';
-      tabSearch.style.display = activeTab === 'search' ? '' : 'none';
-      if (activeTab === 'liked')  renderLikedTab();
-      if (activeTab === 'search') melonSearchBox.focus();
+      tabChart.style.display = activeTab === 'chart' ? '' : 'none';
+      tabLiked.style.display = activeTab === 'liked' ? '' : 'none';
+      tabBugs.style.display  = activeTab === 'bugs'  ? '' : 'none';
+      if (activeTab === 'liked') renderLikedTab();
+      if (activeTab === 'bugs')  bugsSearchBox.focus();
     });
   });
 
-  // ── Search tab buttons ──
-  melonSearchBtn.addEventListener('click', runMelonSearch);
-  melonSearchBox.addEventListener('keydown', e => { if (e.key === 'Enter') runMelonSearch(); });
+  // ── Bugs tab buttons ──
+  bugsSearchBtn.addEventListener('click', runBugsSearch);
+  bugsSearchBox.addEventListener('keydown', e => { if (e.key === 'Enter') runBugsSearch(); });
 
   // ── Chart tab buttons ──
   refreshBtn.addEventListener('click', () => {
@@ -176,7 +177,11 @@
     if (currentIndex < 0) return;
     const song = filteredData[currentIndex];
     const params = new URLSearchParams({ title: song.title, artist: song.artist });
-    if (song.songId) params.set('songId', song.songId);
+    if (activeTab === 'bugs') {
+      if (song.cover) params.set('cover', song.cover);
+    } else {
+      if (song.songId) params.set('songId', song.songId);
+    }
     const a = document.createElement('a');
     a.href = `/api/download?${params}`;
     a.download = `${song.artist} - ${song.title}.mp3`;
@@ -202,19 +207,21 @@
     lyricsOpen = true;
     lyricsPanel.classList.add('open');
     lyricsBtn.classList.add('active');
-    if (lyricsSongId === song.songId && lyricsBody.textContent) return;
+    // songId 없으면 벅스 경로(멜론 검색으로 가사 조회)로 fallback
+    const useBugsLyrics = !song.songId;
+    const cacheKey = useBugsLyrics ? `${song.title}|${song.artist}` : song.songId;
+    if (lyricsSongId === cacheKey && lyricsBody.textContent) return;
     lyricsSongTitle.textContent = `${song.title} — ${song.artist}`;
     lyricsBody.className = 'lyrics-body muted';
     lyricsBody.textContent = '가사 불러오는 중...';
-    lyricsSongId = song.songId;
-    if (!song.songId) {
-      lyricsBody.textContent = '가사를 제공하지 않는 곡입니다.';
-      return;
-    }
-    fetch(`/api/lyrics?songId=${encodeURIComponent(song.songId)}`)
+    lyricsSongId = cacheKey;
+    const url = useBugsLyrics
+      ? `/api/bugs-lyrics?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`
+      : `/api/lyrics?songId=${encodeURIComponent(song.songId)}`;
+    fetch(url)
       .then(r => r.json())
       .then(data => {
-        if (lyricsSongId !== song.songId) return;
+        if (lyricsSongId !== cacheKey) return;
         if (data.lyric) {
           lyricsBody.className = 'lyrics-body';
           lyricsBody.innerHTML = data.lyric.replace(/<BR>/gi, '\n');
@@ -224,7 +231,7 @@
         }
       })
       .catch(() => {
-        if (lyricsSongId !== song.songId) return;
+        if (lyricsSongId !== cacheKey) return;
         lyricsBody.className = 'lyrics-body muted';
         lyricsBody.textContent = '가사를 불러오지 못했습니다.';
       });
@@ -326,9 +333,7 @@
     div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); toggleLike(idx); });
     div.addEventListener('click', e => {
       if (e.target.closest('.melon-link')) return;
-      const isCurrentSong = currentIndex >= 0 &&
-        filteredData[currentIndex]?.title === song.title &&
-        filteredData[currentIndex]?.artist === song.artist;
+      const isCurrentSong = currentSongKey === `${song.title}|${song.artist}`;
       isCurrentSong ? togglePlay() : playChartAt(idx);
     });
     return div;
@@ -383,14 +388,16 @@
         saveLiked();
         renderLikedTab();
         renderChartList();
+        renderBugsList();
         if (currentIndex >= 0 &&
-            `${filteredData[currentIndex]?.title}|${filteredData[currentIndex]?.artist}` === key)
+            `${filteredData[currentIndex]?.title}|${filteredData[currentIndex]?.artist}` === key) {
           likeBtn.innerHTML = HEART_EMPTY;
           likeBtn.classList.remove('liked');
+        }
       });
 
       div.addEventListener('click', () => {
-        playLikedAt([...likedSongs.values()], i);
+        playLikedAt(songs, i);
       });
 
       likedListEl.appendChild(div);
@@ -404,7 +411,7 @@
   }
 
   function playLikedAt(songs, startIdx) {
-    filteredData = songs.map(s => ({ ...s, rank: 0, prevRank: 0, isNew: false, songId: '' }));
+    filteredData = songs.map(s => ({ ...s, rank: 0, prevRank: 0, isNew: false }));
     if (playMode === 'shuffle') buildShuffleQueue();
     playChartAt(startIdx);
   }
@@ -414,19 +421,20 @@
   // ════════════════════════════════════
 
   function renderCurrentList() {
-    if (activeTab === 'chart')  renderChartList();
-    else if (activeTab === 'liked')  renderLikedTab();
-    else if (activeTab === 'search') renderSearchList();
+    if (activeTab === 'chart')     renderChartList();
+    else if (activeTab === 'liked') renderLikedTab();
+    else if (activeTab === 'bugs')  renderBugsList();
   }
 
   function updateActiveItem() {
-    const list = activeTab === 'chart' ? chartList : activeTab === 'search' ? searchList : likedListEl;
-    list.querySelectorAll('.chart-item').forEach((el, i) => {
-      const song = filteredData[i];
-      if (!song) return;
-      const isCurrent = currentIndex >= 0 &&
-        filteredData[currentIndex]?.title === song.title &&
-        filteredData[currentIndex]?.artist === song.artist;
+    const list = activeTab === 'chart' ? chartList
+               : activeTab === 'bugs'  ? bugsList
+               : likedListEl;
+    list.querySelectorAll('.chart-item').forEach(el => {
+      const titleEl  = el.querySelector('.song-title');
+      const artistEl = el.querySelector('.song-artist');
+      if (!titleEl || !artistEl) return;
+      const isCurrent = currentSongKey === `${titleEl.textContent}|${artistEl.textContent}`;
       el.classList.toggle('active', isCurrent);
       const overlay = el.querySelector('.play-overlay');
       if (overlay) overlay.textContent = isCurrent && isPlaying ? '⏸' : '▶';
@@ -437,6 +445,7 @@
     if (idx < 0 || idx >= filteredData.length) return;
     audio.pause();
     currentIndex = idx;
+    currentSongKey = `${filteredData[idx].title}|${filteredData[idx].artist}`;
     if (playMode === 'shuffle') buildShuffleQueue();
     isPlaying    = true;
 
@@ -461,7 +470,7 @@
     const params = new URLSearchParams({ title: song.title, artist: song.artist });
     fetch(`/api/info?${params}`)
       .then(r => r.ok ? r.json() : null)
-      .then(info => { if (info && currentIndex === idx && info.ytTitle) playerYtInfo.textContent = `▶ ${info.ytTitle}`; })
+      .then(info => { if (info && currentSongKey === `${filteredData[idx]?.title}|${filteredData[idx]?.artist}` && info.ytTitle) playerYtInfo.textContent = `▶ ${info.ytTitle}`; })
       .catch(() => {});
 
     try {
@@ -545,7 +554,7 @@
     const song = filteredData[idx];
     const key  = `${song.title}|${song.artist}`;
     if (likedSongs.has(key)) likedSongs.delete(key);
-    else likedSongs.set(key, { title: song.title, artist: song.artist, cover: song.cover, album: song.album });
+    else likedSongs.set(key, { title: song.title, artist: song.artist, cover: song.cover, album: song.album, songId: song.songId });
     saveLiked();
     const liked = likedSongs.has(key);
     if (idx === currentIndex) {
@@ -553,7 +562,7 @@
       likeBtn.classList.toggle('liked', liked);
     }
     // 해당 아이템의 하트만 교체 — 전체 리스트 재렌더 없이
-    const items = (activeTab === 'chart' ? chartList : activeTab === 'search' ? searchList : likedListEl).querySelectorAll('.chart-item');
+    const items = (activeTab === 'chart' ? chartList : activeTab === 'bugs' ? bugsList : likedListEl).querySelectorAll('.chart-item');
     const item = items[idx];
     if (item) {
       const icon = item.querySelector('.like-icon');
@@ -566,48 +575,47 @@
   }
 
   // ════════════════════════════════════
-  // Search tab
+  // Bugs Search tab
   // ════════════════════════════════════
 
-  async function runMelonSearch() {
-    const q = melonSearchBox.value.trim();
+  async function runBugsSearch() {
+    const q = bugsSearchBox.value.trim();
     if (!q) return;
-    showLoading(searchList);
-    searchUpdated.textContent = `"${q}" 검색 중...`;
+    showLoading(bugsList);
+    bugsSearchUpdated.textContent = `"${q}" 검색 중...`;
     try {
-      const res  = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res  = await fetch(`/api/bugs-search?q=${encodeURIComponent(q)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      searchData = json.data || [];
-      searchUpdated.textContent = searchData.length > 0 ? `${searchData.length}곡 검색됨` : '결과 없음';
-      filteredData = searchData;
-      renderSearchList();
+      bugsData = json.data || [];
+      bugsSearchUpdated.textContent = bugsData.length > 0 ? `${bugsData.length}곡 검색됨` : '결과 없음';
+      filteredData = bugsData;
+      renderBugsList();
     } catch (e) {
-      showError(searchList, e.message);
-      searchUpdated.textContent = '오류';
+      showError(bugsList, e.message);
+      bugsSearchUpdated.textContent = '오류';
     }
   }
 
-  function renderSearchList() {
-    searchList.innerHTML = '';
-    if (searchData.length === 0) {
-      searchList.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>검색어를 입력하세요.</p></div>`;
+  function renderBugsList() {
+    bugsList.innerHTML = '';
+    if (bugsData.length === 0) {
+      bugsList.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><p>검색어를 입력하세요.</p></div>`;
       return;
     }
-    searchData.forEach((song, idx) => searchList.appendChild(createSearchItem(song, idx)));
+    bugsData.forEach((song, idx) => bugsList.appendChild(createBugsItem(song, idx)));
   }
 
-  function createSearchItem(song, idx) {
+  function createBugsItem(song, idx) {
     const div = document.createElement('div');
-    const isCurrentSong = currentIndex >= 0 && activeTab === 'search' &&
+    const isCurrentSong = currentIndex >= 0 && activeTab === 'bugs' &&
       filteredData[currentIndex]?.title === song.title &&
       filteredData[currentIndex]?.artist === song.artist;
     div.className = 'chart-item' + (isCurrentSong ? ' active' : '');
     div.style.animationDelay = `${Math.min(idx * 20, 400)}ms`;
 
     const liked    = likedSongs.has(`${song.title}|${song.artist}`);
-    const coverSrc = song.cover || `https://picsum.photos/seed/s${idx}/80/80`;
-    song.displayCover = coverSrc;
+    const coverSrc = song.cover || `https://picsum.photos/seed/b${idx}/80/80`;
 
     div.innerHTML = `
       <div class="rank-wrap">
@@ -615,7 +623,7 @@
       </div>
       <div class="cover-wrap">
         <img class="cover-img" src="${coverSrc}" alt="${escHtml(song.title)}" loading="lazy"
-             onerror="this.src='https://picsum.photos/seed/sx${idx}/80/80'" />
+             onerror="this.src='https://picsum.photos/seed/bx${idx}/80/80'" />
         <div class="play-overlay">${isCurrentSong && isPlaying ? '⏸' : '▶'}</div>
       </div>
       <div class="song-info">
@@ -625,19 +633,14 @@
       </div>
       <div class="song-actions">
         <button class="like-icon${liked ? ' liked' : ''}" title="좋아요">${liked ? HEART_FILLED : HEART_EMPTY}</button>
-        ${song.songId ? `<a class="melon-link" href="https://www.melon.com/song/detail.htm?songId=${song.songId}" target="_blank">🔗</a>` : ''}
+        ${song.songId ? `<a class="melon-link" href="https://music.bugs.co.kr/track/${song.songId}" target="_blank">🔗</a>` : ''}
       </div>`;
 
-    div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); filteredData = searchData; toggleLike(idx); });
+    div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); filteredData = bugsData; toggleLike(idx); });
     div.addEventListener('click', e => {
       if (e.target.closest('.melon-link')) return;
-      filteredData = searchData;
-      // 리스트에 실제 표시된 img src를 cover로 덮어씀
-      const imgEl = div.querySelector('.cover-img');
-      if (imgEl && imgEl.src) song.cover = imgEl.src;
-      const isCurrent = currentIndex >= 0 &&
-        filteredData[currentIndex]?.title === song.title &&
-        filteredData[currentIndex]?.artist === song.artist;
+      filteredData = bugsData;
+      const isCurrent = currentSongKey === `${song.title}|${song.artist}`;
       isCurrent ? togglePlay() : playChartAt(idx);
     });
     return div;
