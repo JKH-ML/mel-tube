@@ -2,3 +2,7 @@
 node_modules/
 yt-dlp.exe
 스크린샷*
+*.mp3
+*.jpg
+thumbtest.js
+.claude/
