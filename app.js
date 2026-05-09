@@ -57,6 +57,14 @@
   const themeBtn       = document.getElementById('themeBtn');
   const tabChart       = document.getElementById('tabChart');
   const tabLiked       = document.getElementById('tabLiked');
+  const lyricsBtn      = document.getElementById('lyricsBtn');
+  const lyricsPanel    = document.getElementById('lyricsPanel');
+  const lyricsClose    = document.getElementById('lyricsClose');
+  const lyricsBody     = document.getElementById('lyricsBody');
+  const lyricsSongTitle = document.getElementById('lyricsSongTitle');
+
+  let lyricsOpen = false;
+  let lyricsSongId = null;
 
   // ── Theme ──
   const MOON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>`;
@@ -148,11 +156,56 @@
   prevBtn.addEventListener('click', playPrev);
   nextBtn.addEventListener('click', playNext);
   likeBtn.addEventListener('click', () => { if (currentIndex >= 0) toggleLike(currentIndex); });
+  lyricsBtn.addEventListener('click', () => {
+    if (currentIndex < 0) return;
+    lyricsOpen ? closeLyrics() : openLyrics(filteredData[currentIndex]);
+  });
+  lyricsClose.addEventListener('click', closeLyrics);
+
   playModeBtn.addEventListener('click', () => {
     playMode = playMode === 'one' ? 'all' : playMode === 'all' ? 'shuffle' : 'one';
     localStorage.setItem('kc_playmode', playMode);
     applyPlayMode();
   });
+
+  // ── Lyrics ──
+  function openLyrics(song) {
+    lyricsOpen = true;
+    lyricsPanel.classList.add('open');
+    lyricsBtn.classList.add('active');
+    if (lyricsSongId === song.songId && lyricsBody.textContent) return;
+    lyricsSongTitle.textContent = `${song.title} — ${song.artist}`;
+    lyricsBody.className = 'lyrics-body muted';
+    lyricsBody.textContent = '가사 불러오는 중...';
+    lyricsSongId = song.songId;
+    if (!song.songId) {
+      lyricsBody.textContent = '가사를 제공하지 않는 곡입니다.';
+      return;
+    }
+    fetch(`/api/lyrics?songId=${encodeURIComponent(song.songId)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (lyricsSongId !== song.songId) return;
+        if (data.lyric) {
+          lyricsBody.className = 'lyrics-body';
+          lyricsBody.innerHTML = data.lyric.replace(/<BR>/gi, '\n');
+        } else {
+          lyricsBody.className = 'lyrics-body muted';
+          lyricsBody.textContent = '등록된 가사가 없습니다.';
+        }
+      })
+      .catch(() => {
+        if (lyricsSongId !== song.songId) return;
+        lyricsBody.className = 'lyrics-body muted';
+        lyricsBody.textContent = '가사를 불러오지 못했습니다.';
+      });
+  }
+
+  function closeLyrics() {
+    lyricsOpen = false;
+    lyricsPanel.classList.remove('open');
+    lyricsBtn.classList.remove('active');
+  }
 
   // ── Init ──
   updateLikedCount();
@@ -354,6 +407,8 @@
     likeBtn.textContent      = likedSongs.has(`${song.title}|${song.artist}`) ? '❤️' : '🤍';
     loadingBar.classList.add('active');
     renderCurrentList();
+
+    if (lyricsOpen) openLyrics(song);
 
     const params = new URLSearchParams({ title: song.title, artist: song.artist });
     fetch(`/api/info?${params}`)

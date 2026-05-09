@@ -136,6 +136,28 @@ async function searchAndExtract(title, artist) {
 
 // ── Routes ──
 
+app.get('/api/lyrics', async (req, res) => {
+  const { songId } = req.query;
+  if (!songId) return res.status(400).json({ error: 'songId 필요' });
+  try {
+    const r = await axios.get('https://www.melon.com/song/lyricInfo.json', {
+      params: { songId },
+      headers: {
+        ...HEADERS,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}`,
+      },
+      timeout: 8000,
+    });
+    const lyric = r.data?.lyric || null;
+    res.json({ lyric });
+  } catch (e) {
+    console.error('[lyrics]', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 app.get('/api/chart', async (req, res) => {
   if (chartCache && Date.now() - chartCachedAt < CACHE_TTL) {
     return res.json({ source: 'cache', data: chartCache });

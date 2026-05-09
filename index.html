@@ -109,6 +109,15 @@
 
   </main>
 
+  <!-- 가사 패널 -->
+  <div class="lyrics-panel" id="lyricsPanel">
+    <div class="lyrics-header">
+      <span class="lyrics-title" id="lyricsSongTitle"></span>
+      <button class="lyrics-close" id="lyricsClose">✕</button>
+    </div>
+    <div class="lyrics-body" id="lyricsBody"></div>
+  </div>
+
   <div class="player-bar" id="playerBar">
     <div class="loading-bar" id="loadingBar"></div>
 
@@ -139,6 +148,7 @@
     </div>
 
     <div class="player-extra">
+      <button class="ctrl-btn lyrics-btn" id="lyricsBtn" title="가사 보기">가사</button>
       <button class="ctrl-btn like-btn" id="likeBtn">🤍</button>
       <div class="volume-wrap">
         🔊
