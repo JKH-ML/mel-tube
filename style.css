@@ -600,14 +600,17 @@ body {
 }
 .duration { font-size: 0.8rem; color: var(--text-muted); }
 .like-icon {
-  font-size: 1rem;
   background: none;
   border: none;
   cursor: pointer;
   padding: 4px;
-  transition: transform 0.15s;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  transition: transform 0.15s, color 0.15s;
 }
-.like-icon:hover { transform: scale(1.3); }
+.like-icon:hover { transform: scale(1.2); color: #e05a7a; }
+.like-icon.liked { color: #e05a7a; }
 
 /* ── Empty state ── */
 .empty {
@@ -751,7 +754,9 @@ body {
 .progress-bar:hover .progress-fill { background: var(--accent-hover); }
 
 .player-extra { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
-.like-btn { font-size: 1.2rem; }
+.like-btn { color: var(--text-muted); }
+.like-btn.liked { color: #e05a7a; }
+.like-btn:hover { color: #e05a7a; }
 .volume-wrap { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--text-muted); }
 .volume-slider {
   width: 80px;
@@ -801,7 +806,7 @@ body {
   bottom: var(--player-h);
   left: 0;
   right: 0;
-  max-height: 55vh;
+  max-height: calc(100vh - var(--player-h) - 60px);
   background: rgba(20, 20, 28, 0.97);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border);
@@ -855,6 +860,16 @@ body {
   white-space: pre-wrap;
 }
 .lyrics-body.muted { color: var(--text-muted); font-size: 0.88rem; }
+
+.download-btn {
+  color: var(--text-muted);
+  transition: color 0.15s;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+.download-btn:hover { color: var(--accent); }
+.download-btn.loading { animation: spin 1s linear infinite; opacity: 0.6; pointer-events: none; }
 
 .lyrics-btn {
   font-size: 0.72rem;

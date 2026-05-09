@@ -8,6 +8,9 @@
   let playMode     = localStorage.getItem('kc_playmode') || 'all';
   let shuffleQueue = [];
 
+  const HEART_EMPTY  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+  const HEART_FILLED = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+
   const MODE_TITLES = { one: '1곡 반복', all: '전체 재생', shuffle: '전체 랜덤' };
   const PLAY_MODE_SVG = {
     one:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="10" y="14" font-size="7" font-family="sans-serif" fill="currentColor" stroke="none" font-weight="bold">1</text></svg>`,
@@ -57,6 +60,7 @@
   const themeBtn       = document.getElementById('themeBtn');
   const tabChart       = document.getElementById('tabChart');
   const tabLiked       = document.getElementById('tabLiked');
+  const downloadBtn    = document.getElementById('downloadBtn');
   const lyricsBtn      = document.getElementById('lyricsBtn');
   const lyricsPanel    = document.getElementById('lyricsPanel');
   const lyricsClose    = document.getElementById('lyricsClose');
@@ -102,7 +106,7 @@
   });
   audio.addEventListener('ended', () => {
     isPlaying = false; playBtn.textContent = '▶';
-    renderCurrentList();
+    updateActiveItem();
     setTimeout(playNext, 800);
   });
   audio.addEventListener('waiting', () => loadingBar.classList.add('active'));
@@ -156,6 +160,19 @@
   prevBtn.addEventListener('click', playPrev);
   nextBtn.addEventListener('click', playNext);
   likeBtn.addEventListener('click', () => { if (currentIndex >= 0) toggleLike(currentIndex); });
+  downloadBtn.addEventListener('click', () => {
+    if (currentIndex < 0) return;
+    const song = filteredData[currentIndex];
+    const params = new URLSearchParams({ title: song.title, artist: song.artist });
+    if (song.songId) params.set('songId', song.songId);
+    const a = document.createElement('a');
+    a.href = `/api/download?${params}`;
+    a.download = `${song.artist} - ${song.title}.mp3`;
+    a.click();
+    downloadBtn.classList.add('loading');
+    setTimeout(() => downloadBtn.classList.remove('loading'), 8000);
+  });
+
   lyricsBtn.addEventListener('click', () => {
     if (currentIndex < 0) return;
     lyricsOpen ? closeLyrics() : openLyrics(filteredData[currentIndex]);
@@ -254,7 +271,10 @@
 
   function createChartItem(song, idx) {
     const div = document.createElement('div');
-    div.className = 'chart-item' + (idx === currentIndex && activeTab === 'chart' ? ' active' : '');
+    const isCurrentSong = currentIndex >= 0 && activeTab === 'chart' &&
+      filteredData[currentIndex]?.title === song.title &&
+      filteredData[currentIndex]?.artist === song.artist;
+    div.className = 'chart-item' + (isCurrentSong ? ' active' : '');
     div.style.animationDelay = `${Math.min(idx * 25, 500)}ms`;
 
     const rankClass = song.rank === 1 ? 'gold' : song.rank === 2 ? 'silver' : song.rank === 3 ? 'bronze' : '';
@@ -270,7 +290,6 @@
 
     const liked    = likedSongs.has(`${song.title}|${song.artist}`);
     const coverSrc = song.cover || `https://picsum.photos/seed/${song.rank}/80/80`;
-    const isActive = idx === currentIndex && activeTab === 'chart';
 
     div.innerHTML = `
       <div class="rank-wrap">
@@ -280,7 +299,7 @@
       <div class="cover-wrap">
         <img class="cover-img" src="${coverSrc}" alt="${escHtml(song.title)}" loading="lazy"
              onerror="this.src='https://picsum.photos/seed/x${song.rank}/80/80'" />
-        <div class="play-overlay">${isActive && isPlaying ? '⏸' : '▶'}</div>
+        <div class="play-overlay">${isCurrentSong && isPlaying ? '⏸' : '▶'}</div>
       </div>
       <div class="song-info">
         <div class="song-title">${escHtml(song.title)}</div>
@@ -288,14 +307,17 @@
         <div class="song-meta"><span class="album-name">${escHtml(song.album)}</span></div>
       </div>
       <div class="song-actions">
-        <button class="like-icon" title="좋아요">${liked ? '❤️' : '🤍'}</button>
+        <button class="like-icon${liked ? ' liked' : ''}" title="좋아요">${liked ? HEART_FILLED : HEART_EMPTY}</button>
         ${song.songId ? `<a class="melon-link" href="https://www.melon.com/song/detail.htm?songId=${song.songId}" target="_blank">🔗</a>` : ''}
       </div>`;
 
     div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); toggleLike(idx); });
     div.addEventListener('click', e => {
       if (e.target.closest('.melon-link')) return;
-      idx === currentIndex ? togglePlay() : playChartAt(idx);
+      const isCurrentSong = currentIndex >= 0 &&
+        filteredData[currentIndex]?.title === song.title &&
+        filteredData[currentIndex]?.artist === song.artist;
+      isCurrentSong ? togglePlay() : playChartAt(idx);
     });
     return div;
   }
@@ -314,8 +336,8 @@
 
     likedListEl.innerHTML = '';
     if (songs.length === 0) {
-      likedListEl.innerHTML = `<div class="empty"><div class="empty-icon">${likedSongs.size === 0 ? '🤍' : '🔍'}</div>
-        <p>${likedSongs.size === 0 ? '아직 좋아요한 곡이 없습니다.<br>차트에서 🤍를 눌러보세요.' : '검색 결과가 없습니다.'}</p></div>`;
+      likedListEl.innerHTML = `<div class="empty"><div class="empty-icon">${likedSongs.size === 0 ? '🫶' : '🔍'}</div>
+        <p>${likedSongs.size === 0 ? '아직 좋아요한 곡이 없습니다.<br>차트에서 하트를 눌러보세요.' : '검색 결과가 없습니다.'}</p></div>`;
       return;
     }
 
@@ -340,7 +362,7 @@
           <div class="song-meta"><span class="album-name">${escHtml(song.album || '')}</span></div>
         </div>
         <div class="song-actions">
-          <button class="like-icon liked-remove" title="좋아요 취소">❤️</button>
+          <button class="like-icon liked liked-remove" title="좋아요 취소">${HEART_FILLED}</button>
         </div>`;
 
       div.querySelector('.liked-remove').addEventListener('click', e => {
@@ -351,7 +373,8 @@
         renderChartList();
         if (currentIndex >= 0 &&
             `${filteredData[currentIndex]?.title}|${filteredData[currentIndex]?.artist}` === key)
-          likeBtn.textContent = '🤍';
+          likeBtn.innerHTML = HEART_EMPTY;
+          likeBtn.classList.remove('liked');
       });
 
       div.addEventListener('click', () => {
@@ -387,6 +410,20 @@
     else renderLikedTab();
   }
 
+  function updateActiveItem() {
+    const list = activeTab === 'chart' ? chartList : likedListEl;
+    list.querySelectorAll('.chart-item').forEach((el, i) => {
+      const song = filteredData[i];
+      if (!song) return;
+      const isCurrent = currentIndex >= 0 &&
+        filteredData[currentIndex]?.title === song.title &&
+        filteredData[currentIndex]?.artist === song.artist;
+      el.classList.toggle('active', isCurrent);
+      const overlay = el.querySelector('.play-overlay');
+      if (overlay) overlay.textContent = isCurrent && isPlaying ? '⏸' : '▶';
+    });
+  }
+
   async function playChartAt(idx) {
     if (idx < 0 || idx >= filteredData.length) return;
     audio.pause();
@@ -404,9 +441,11 @@
     currentTime.textContent  = '0:00';
     totalTime.textContent    = '--:--';
     progressFill.style.width = '0%';
-    likeBtn.textContent      = likedSongs.has(`${song.title}|${song.artist}`) ? '❤️' : '🤍';
+    const isLiked = likedSongs.has(`${song.title}|${song.artist}`);
+    likeBtn.innerHTML = isLiked ? HEART_FILLED : HEART_EMPTY;
+    likeBtn.classList.toggle('liked', isLiked);
     loadingBar.classList.add('active');
-    renderCurrentList();
+    updateActiveItem();
 
     if (lyricsOpen) openLyrics(song);
 
@@ -475,7 +514,7 @@
     } else {
       audio.play().catch(() => {}); isPlaying = true; playBtn.textContent = '⏸';
     }
-    renderCurrentList();
+    updateActiveItem();
   }
 
   // ════════════════════════════════════
@@ -499,8 +538,22 @@
     if (likedSongs.has(key)) likedSongs.delete(key);
     else likedSongs.set(key, { title: song.title, artist: song.artist, cover: song.cover, album: song.album });
     saveLiked();
-    if (idx === currentIndex) likeBtn.textContent = likedSongs.has(key) ? '❤️' : '🤍';
-    renderCurrentList();
+    const liked = likedSongs.has(key);
+    if (idx === currentIndex) {
+      likeBtn.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
+      likeBtn.classList.toggle('liked', liked);
+    }
+    // 해당 아이템의 하트만 교체 — 전체 리스트 재렌더 없이
+    const items = (activeTab === 'chart' ? chartList : likedListEl).querySelectorAll('.chart-item');
+    const item = items[idx];
+    if (item) {
+      const icon = item.querySelector('.like-icon');
+      if (icon) {
+        icon.innerHTML = liked ? HEART_FILLED : HEART_EMPTY;
+        icon.classList.toggle('liked', liked);
+      }
+    }
+    updateLikedCount();
   }
 
   // ════════════════════════════════════

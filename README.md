@@ -10,8 +10,11 @@
 - **유튜브 재생** — 곡 클릭 시 유튜브에서 오디오만 스트리밍
 - **재생 모드** — 1곡 반복 / 전체 재생 / 전체 랜덤 토글
 - **좋아요** — 좋아요한 곡 모아보기, 전체 재생
+- **가사** — 멜론 가사 슬라이드업 패널
+- **MP3 다운로드** — 앨범아트(멜론 500px) + 가사 + 태그 포함
 - **날짜별 히스토리** — 차트 스냅샷을 Cloudflare R2에 날짜별 저장
-- **백그라운드 YT 매칭** — 차트 로드 시 상위 20곡 자동 유튜브 매칭 (3초 간격)
+- **백그라운드 YT 매칭** — 차트 로드 시 100곡 자동 유튜브 매칭 (5곡 병렬)
+- **R2 캐시 프리로드** — 서버 시작 시 오늘 매칭 데이터 자동 로드로 재생 속도 향상
 - **다크 / 라이트 모드** — 설정 기억
 - **볼륨 기억** — 새로고침해도 유지
 
@@ -22,6 +25,7 @@
 | 차트 데이터 | 멜론 HTML 크롤링 (cheerio) |
 | 오디오 검색/추출 | yt-dlp |
 | 오디오 스트리밍 | Node.js → 브라우저 프록시 |
+| MP3 변환 | ffmpeg (앨범아트 · 가사 태그 포함) |
 | 히스토리 저장 | Cloudflare R2 (S3 호환) |
 | 프론트엔드 | 바닐라 HTML / CSS / JS |
 | 백엔드 | Node.js + Express |
@@ -31,6 +35,7 @@
 ### 요구사항
 
 - Node.js 18+
+- ffmpeg — [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 또는 `winget install Gyan.FFmpeg`
 - (선택) Cloudflare R2 계정 — 없으면 히스토리 저장 기능만 비활성화
 
 ### 설치
@@ -57,7 +62,7 @@ R2_BUCKET=kpop-chart
 R2_ENDPOINT=https://your_account_id.r2.cloudflarestorage.com
 ```
 
-> R2 없이 실행해도 차트 조회와 재생은 정상 동작합니다. 히스토리 저장만 스킵됩니다.
+> R2 없이 실행해도 차트 조회, 재생, 다운로드는 정상 동작합니다. 히스토리 저장만 스킵됩니다.
 
 ### R2 세팅 방법
 
@@ -84,6 +89,8 @@ npm start
 | GET | `/api/chart` | 멜론 TOP 100 차트 |
 | GET | `/api/info?title=&artist=` | 유튜브 영상 메타 정보 |
 | GET | `/api/stream?title=&artist=` | 오디오 스트리밍 프록시 |
+| GET | `/api/download?title=&artist=&songId=` | MP3 다운로드 (앨범아트 · 가사 포함) |
+| GET | `/api/lyrics?songId=` | 멜론 가사 |
 | GET | `/api/match-status` | 백그라운드 매칭 큐 상태 |
 | GET | `/api/history` | 저장된 날짜 목록 |
 | GET | `/api/history/:date` | 특정 날짜 차트 스냅샷 |

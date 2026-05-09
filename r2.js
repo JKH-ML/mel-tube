@@ -30,21 +30,25 @@ async function saveChart(chartId, songs) {
 }
 
 // 유튜브 매칭 정보 저장/업데이트: yt-matches/YYYY-MM-DD.json
-// 하루치를 한 파일에 모아서 저장 (key: "title|artist")
-async function saveYtMatch(title, artist, info) {
+// 배치 저장 큐 — 동시 write 충돌 방지
+let ytMatchQueue = {};
+let ytMatchFlushTimer = null;
+
+async function flushYtMatches() {
+  ytMatchFlushTimer = null;
+  const batch = ytMatchQueue;
+  ytMatchQueue = {};
+
   const key = `yt-matches/${today()}.json`;
   let existing = {};
-
-  // 기존 파일 읽기
   try {
     const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
-    const text = await streamToString(res.Body);
-    existing = JSON.parse(text);
+    existing = JSON.parse(await streamToString(res.Body));
   } catch (e) {
     if (e.name !== 'NoSuchKey') console.warn('[R2] getYtMatch warn:', e.message);
   }
 
-  existing[`${title}|${artist}`] = { ...info, savedAt: new Date().toISOString() };
+  Object.assign(existing, batch);
 
   await s3.send(new PutObjectCommand({
     Bucket:      BUCKET,
@@ -52,6 +56,14 @@ async function saveYtMatch(title, artist, info) {
     Body:        JSON.stringify(existing, null, 2),
     ContentType: 'application/json',
   }));
+  console.log(`[R2] yt-matches ${Object.keys(batch).length}곡 저장`);
+}
+
+async function saveYtMatch(title, artist, info) {
+  ytMatchQueue[`${title}|${artist}`] = { ...info, savedAt: new Date().toISOString() };
+  if (!ytMatchFlushTimer) {
+    ytMatchFlushTimer = setTimeout(flushYtMatches, 2000);
+  }
 }
 
 // 특정 날짜 차트 조회

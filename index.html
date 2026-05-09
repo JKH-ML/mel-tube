@@ -22,22 +22,6 @@
       </nav>
 
       <div class="header-right">
-        <div class="service-badges">
-          <span class="svc-badge" title="차트 데이터: 멜론">
-            <img src="https://cdnimg.melon.co.kr/resource/image/web/common/logo_melon142x99.png" alt="Melon" class="svc-logo" />
-            <span class="svc-label">차트</span>
-          </span>
-          <span class="svc-sep">+</span>
-          <span class="svc-badge" title="음원 재생: YouTube">
-            <svg class="svc-logo svc-svg" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8z"/><polygon fill="#fff" points="9.75,15.02 15.5,12 9.75,8.98"/></svg>
-            <span class="svc-label">재생</span>
-          </span>
-          <span class="svc-sep">+</span>
-          <span class="svc-badge" title="데이터 저장: Cloudflare R2">
-            <svg class="svc-logo svc-svg" viewBox="0 0 24 24" fill="#F6821F"><path d="M16.5 8.25A4.5 4.5 0 0 0 8.1 7.5H7.5A3 3 0 0 0 7.5 13.5h9a2.25 2.25 0 0 0 0-4.5z"/></svg>
-            <span class="svc-label">캐싱</span>
-          </span>
-        </div>
         <button class="theme-btn" id="themeBtn" title="라이트/다크 모드"></button>
       </div>
     </div>
@@ -51,7 +35,7 @@
         <div class="chart-title-wrap">
           <span class="chart-icon" id="chartIcon">🍈</span>
           <div>
-            <h2 class="chart-name" id="chartName">멜론 TOP 100</h2>
+            <h2 class="chart-name" id="chartName">TOP 100</h2>
             <p class="chart-updated" id="chartUpdated"></p>
           </div>
         </div>
@@ -148,8 +132,11 @@
     </div>
 
     <div class="player-extra">
+      <button class="ctrl-btn download-btn" id="downloadBtn" title="MP3 다운로드">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
       <button class="ctrl-btn lyrics-btn" id="lyricsBtn" title="가사 보기">가사</button>
-      <button class="ctrl-btn like-btn" id="likeBtn">🤍</button>
+      <button class="ctrl-btn like-btn" id="likeBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
       <div class="volume-wrap">
         🔊
         <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70" />
