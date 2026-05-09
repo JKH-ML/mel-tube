@@ -1,6 +1,6 @@
-# 🎵 K-Chart
+# 🎵 mel-tube
 
-![K-Chart 스크린샷](screenshot.png)
+![mel-tube 스크린샷](screenshot.png)
 
 멜론 TOP 100 실시간 차트를 보고, 유튜브 오디오로 바로 재생하는 로컬 웹앱입니다.
 
@@ -36,8 +36,8 @@
 ### 설치
 
 ```bash
-git clone <repo>
-cd kpop-chart
+git clone https://github.com/JKH-ML/mel-tube.git
+cd mel-tube
 npm install
 ```
 
@@ -70,17 +70,28 @@ R2_ENDPOINT=https://your_account_id.r2.cloudflarestorage.com
 ### 실행
 
 ```bash
-node server.js
+npm start
 ```
 
 브라우저에서 http://localhost:3000 접속
 
-첫 실행 시 `yt-dlp.exe`를 자동으로 다운로드합니다 (약 30초 소요).
+> 첫 실행 시 `yt-dlp.exe`를 자동으로 다운로드합니다 (약 30초 소요).
+
+## API
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/chart` | 멜론 TOP 100 차트 |
+| GET | `/api/info?title=&artist=` | 유튜브 영상 메타 정보 |
+| GET | `/api/stream?title=&artist=` | 오디오 스트리밍 프록시 |
+| GET | `/api/match-status` | 백그라운드 매칭 큐 상태 |
+| GET | `/api/history` | 저장된 날짜 목록 |
+| GET | `/api/history/:date` | 특정 날짜 차트 스냅샷 |
 
 ## R2 저장 구조
 
 ```
-kpop-chart (버킷)
+kpop-chart
 ├── charts/
 │   ├── 2026-05-09/
 │   │   └── melon.json      # 100곡 전체 스냅샷
