@@ -299,8 +299,9 @@ app.get('/api/download', async (req, res) => {
 
 async function fetchLyric(title, artist) {
   try {
+    const cleanArtist = artist.replace(/\(.*?\)/g, '').trim();
     const searchRes = await axios.get('https://www.melon.com/search/song/index.htm', {
-      params: { q: `${title} ${artist}` },
+      params: { q: `${title} ${cleanArtist}` },
       headers: { ...HEADERS, 'Referer': 'https://www.melon.com' },
       timeout: 10000,
     });
@@ -322,7 +323,7 @@ async function fetchLyric(title, artist) {
       },
       timeout: 8000,
     });
-    return lyricRes.data?.lyric?.replace(/<BR>/gi, '\n') || null;
+    return lyricRes.data?.lyric || null;
   } catch (e) {
     console.warn('[fetchLyric]', e.message);
     return null;
@@ -333,7 +334,9 @@ app.get('/api/lyrics', async (req, res) => {
   const { title, artist } = req.query;
   if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
   try {
-    res.json({ lyric: await fetchLyric(title, artist) });
+    const lyric = await fetchLyric(title, artist);
+    console.log(`[lyrics] "${title}" - "${artist}" → ${lyric ? '가사 있음' : '없음'}`);
+    res.json({ lyric });
   } catch (e) {
     res.status(502).json({ error: e.message });
   }

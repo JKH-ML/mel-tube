@@ -222,7 +222,7 @@
     lyricsPanel.classList.add('open');
     lyricsBtn.classList.add('active');
     const cacheKey = `${song.title}|${song.artist}`;
-    if (lyricsSongId === cacheKey && lyricsBody.textContent) return;
+    if (lyricsSongId === cacheKey && lyricsBody.classList.contains('lyrics-body') && !lyricsBody.classList.contains('muted')) return;
     lyricsSongTitle.textContent = `${song.title} — ${song.artist}`;
     lyricsBody.className = 'lyrics-body muted';
     lyricsBody.textContent = '가사 불러오는 중...';
@@ -234,7 +234,7 @@
         if (lyricsSongId !== cacheKey) return;
         if (data.lyric) {
           lyricsBody.className = 'lyrics-body';
-          lyricsBody.innerHTML = data.lyric.replace(/<BR>/gi, '\n');
+          lyricsBody.innerHTML = data.lyric.replace(/<BR>/gi, '<br>');
         } else {
           lyricsBody.className = 'lyrics-body muted';
           lyricsBody.textContent = '등록된 가사가 없습니다.';
