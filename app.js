@@ -12,13 +12,13 @@
   const HEART_EMPTY  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
   const HEART_FILLED = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
 
-  const MODE_TITLES = { one: '1곡 반복', all: '전체 재생', shuffle: '전체 랜덤' };
+  const MODE_TITLES = { one: '한 곡 반복', all: '전체 반복', shuffle: '랜덤 재생' };
+  // repeat-1, repeat, shuffle (lucide SVG)
   const PLAY_MODE_SVG = {
-    one:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="10" y="14" font-size="7" font-family="sans-serif" fill="currentColor" stroke="none" font-weight="bold">1</text></svg>`,
-    all:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
-    shuffle: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`,
+    one:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M11 10h1v4"/></svg>`,
+    all:     `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`,
+    shuffle: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.5 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.7l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>`,
   };
-  let viewingDate  = null;
   let activeTab    = 'chart'; // 'chart' | 'liked' | 'bugs'
   let bugsData     = [];
 
@@ -51,10 +51,6 @@
   const totalTime      = document.getElementById('totalTime');
   const likeBtn        = document.getElementById('likeBtn');
   const loadingBar     = document.getElementById('loadingBar');
-  const historyBtn     = document.getElementById('historyBtn');
-  const historyPanel   = document.getElementById('historyPanel');
-  const historyDates   = document.getElementById('historyDates');
-  const historyClose   = document.getElementById('historyClose');
   const likedPlayAll   = document.getElementById('likedPlayAll');
   const likedClear     = document.getElementById('likedClear');
   const likedCount     = document.getElementById('likedCount');
@@ -138,6 +134,7 @@
       tabChart.style.display = activeTab === 'chart' ? '' : 'none';
       tabLiked.style.display = activeTab === 'liked' ? '' : 'none';
       tabBugs.style.display  = activeTab === 'bugs'  ? '' : 'none';
+      if (activeTab === 'chart') applyFilter();
       if (activeTab === 'liked') renderLikedTab();
       if (activeTab === 'bugs')  bugsSearchBox.focus();
     });
@@ -154,8 +151,6 @@
     loadChart(true);
   });
   searchBox.addEventListener('input', applyFilter);
-  historyBtn.addEventListener('click', toggleHistoryPanel);
-  historyClose.addEventListener('click', closeHistoryPanel);
 
   // ── Liked tab buttons ──
   likedSearchBox.addEventListener('input', renderLikedTab);
@@ -177,17 +172,36 @@
     if (currentIndex < 0) return;
     const song = filteredData[currentIndex];
     const params = new URLSearchParams({ title: song.title, artist: song.artist });
-    if (activeTab === 'bugs') {
-      if (song.cover) params.set('cover', song.cover);
-    } else {
-      if (song.songId) params.set('songId', song.songId);
-    }
+    if (song.cover) params.set('cover', song.cover);
     const a = document.createElement('a');
     a.href = `/api/download?${params}`;
     a.download = `${song.artist} - ${song.title}.mp3`;
-    a.click();
+    const origHTML = downloadBtn.innerHTML;
     downloadBtn.classList.add('loading');
-    setTimeout(() => downloadBtn.classList.remove('loading'), 8000);
+    fetch(a.href)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const tmp = document.createElement('a');
+        tmp.href = url;
+        tmp.download = a.download;
+        tmp.click();
+        URL.revokeObjectURL(url);
+        downloadBtn.classList.remove('loading');
+        downloadBtn.classList.add('done');
+        downloadBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        setTimeout(() => {
+          downloadBtn.classList.remove('done');
+          downloadBtn.innerHTML = origHTML;
+        }, 1500);
+      })
+      .catch(() => {
+        downloadBtn.classList.remove('loading');
+        downloadBtn.innerHTML = origHTML;
+      });
   });
 
   lyricsBtn.addEventListener('click', () => {
@@ -207,17 +221,13 @@
     lyricsOpen = true;
     lyricsPanel.classList.add('open');
     lyricsBtn.classList.add('active');
-    // songId 없으면 벅스 경로(멜론 검색으로 가사 조회)로 fallback
-    const useBugsLyrics = !song.songId;
-    const cacheKey = useBugsLyrics ? `${song.title}|${song.artist}` : song.songId;
+    const cacheKey = `${song.title}|${song.artist}`;
     if (lyricsSongId === cacheKey && lyricsBody.textContent) return;
     lyricsSongTitle.textContent = `${song.title} — ${song.artist}`;
     lyricsBody.className = 'lyrics-body muted';
     lyricsBody.textContent = '가사 불러오는 중...';
     lyricsSongId = cacheKey;
-    const url = useBugsLyrics
-      ? `/api/bugs-lyrics?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`
-      : `/api/lyrics?songId=${encodeURIComponent(song.songId)}`;
+    const url = `/api/lyrics?title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`;
     fetch(url)
       .then(r => r.json())
       .then(data => {
@@ -256,14 +266,12 @@
     chartUpdated.textContent = '불러오는 중...';
     showLoading(chartList);
     try {
-      const res  = await fetch(bust ? `/api/chart?t=${Date.now()}` : '/api/chart');
+      const res  = await fetch(bust ? '/api/chart?bust=1' : '/api/chart');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       currentData  = json.data;
-      viewingDate  = null;
-      document.getElementById('historyBanner')?.remove();
       const now = new Date();
-      chartUpdated.textContent = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 기준`;
+      chartUpdated.textContent = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 주간 기준`;
       applyFilter();
     } catch (e) {
       showError(chartList, e.message);
@@ -327,7 +335,7 @@
       </div>
       <div class="song-actions">
         <button class="like-icon${liked ? ' liked' : ''}" title="좋아요">${liked ? HEART_FILLED : HEART_EMPTY}</button>
-        ${song.songId ? `<a class="melon-link" href="https://www.melon.com/song/detail.htm?songId=${song.songId}" target="_blank">🔗</a>` : ''}
+        ${song.songId ? `<a class="melon-link" href="https://music.bugs.co.kr/track/${song.songId}" target="_blank">🔗</a>` : ''}
       </div>`;
 
     div.querySelector('.like-icon').addEventListener('click', e => { e.stopPropagation(); toggleLike(idx); });
@@ -487,9 +495,9 @@
 
 
   function applyPlayMode() {
-    playModeBtn.classList.toggle('active', playMode !== 'all');
+    playModeBtn.classList.toggle('active', true);
+    playModeBtn.dataset.mode = playMode;
     playModeBtn.title = MODE_TITLES[playMode];
-    // 아이콘 교체: i 태그 대신 SVG를 직접 주입
     playModeBtn.innerHTML = PLAY_MODE_SVG[playMode];
     if (playMode === 'shuffle') buildShuffleQueue();
   }
@@ -644,66 +652,6 @@
       isCurrent ? togglePlay() : playChartAt(idx);
     });
     return div;
-  }
-
-  // ════════════════════════════════════
-  // History
-  // ════════════════════════════════════
-
-  window.loadLive = () => {
-    viewingDate = null;
-    document.getElementById('historyBanner')?.remove();
-    historyDates.querySelectorAll('.history-date-btn').forEach(b => b.classList.remove('active'));
-    loadChart(true);
-  };
-
-  function closeHistoryPanel() {
-    historyPanel.style.display = 'none';
-    historyBtn.classList.remove('active');
-  }
-
-  async function toggleHistoryPanel() {
-    if (historyPanel.style.display !== 'none') { closeHistoryPanel(); return; }
-    historyPanel.style.display = 'block';
-    historyBtn.classList.add('active');
-    historyDates.innerHTML = '<div class="loading"><div class="spinner"></div><p>불러오는 중...</p></div>';
-    try {
-      const json  = await fetch('/api/history').then(r => r.json());
-      const dates = json.dates || [];
-      if (!dates.length) { historyDates.innerHTML = '<p class="history-empty">저장된 기록이 없습니다.</p>'; return; }
-      historyDates.innerHTML = '';
-      dates.forEach(date => {
-        const btn = document.createElement('button');
-        btn.className = 'history-date-btn' + (date === viewingDate ? ' active' : '');
-        btn.textContent = date;
-        btn.addEventListener('click', () => loadHistoryChart(date));
-        historyDates.appendChild(btn);
-      });
-    } catch (e) {
-      historyDates.innerHTML = `<p class="history-empty">오류: ${escHtml(e.message)}</p>`;
-    }
-  }
-
-  async function loadHistoryChart(date) {
-    historyDates.querySelectorAll('.history-date-btn').forEach(b =>
-      b.classList.toggle('active', b.textContent === date));
-    viewingDate = date;
-    showLoading(chartList);
-    try {
-      const res  = await fetch(`/api/history/${date}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      currentData = json.chart.songs;
-      chartUpdated.textContent = `📅 ${date} 기록`;
-      let banner = document.getElementById('historyBanner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'historyBanner'; banner.className = 'history-banner';
-        chartList.before(banner);
-      }
-      banner.innerHTML = `📅 <strong>${date}</strong> 차트 기록 <button onclick="loadLive()">실시간으로 돌아가기</button>`;
-      applyFilter();
-    } catch (e) { showError(chartList, e.message); }
   }
 
   // ── Helpers ──

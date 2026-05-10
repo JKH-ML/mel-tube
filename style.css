@@ -693,14 +693,18 @@ body {
 }
 .player-controls { display: flex; align-items: center; gap: 10px; }
 .play-mode-btn {
-  opacity: 0.4;
+  opacity: 0.5;
   margin-left: 6px;
   padding: 4px;
   border-radius: 6px;
   transition: opacity 0.2s, color 0.2s, background 0.2s;
 }
-.play-mode-btn:hover { opacity: 0.8; }
-.play-mode-btn.active {
+.play-mode-btn:hover { opacity: 0.9; }
+.play-mode-btn[data-mode="all"] {
+  opacity: 1;
+}
+.play-mode-btn[data-mode="one"],
+.play-mode-btn[data-mode="shuffle"] {
   color: var(--accent);
   opacity: 1;
   background: rgba(124,106,247,0.12);
@@ -867,9 +871,38 @@ body {
   padding: 4px;
   display: flex;
   align-items: center;
+  position: relative;
+  overflow: hidden;
 }
 .download-btn:hover { color: var(--accent); }
-.download-btn.loading { animation: spin 1s linear infinite; opacity: 0.6; pointer-events: none; }
+.download-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 2px;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: none;
+}
+.download-btn.loading {
+  color: var(--accent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.download-btn.loading::after {
+  animation: dl-progress 7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.download-btn.done {
+  color: #4caf50;
+  pointer-events: none;
+}
+@keyframes dl-progress {
+  0%   { width: 0%; }
+  60%  { width: 80%; }
+  90%  { width: 92%; }
+  100% { width: 92%; }
+}
 
 .lyrics-btn {
   font-size: 0.72rem;

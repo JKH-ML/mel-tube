@@ -18,7 +18,7 @@ app.use(express.static(path.join(__dirname)));
 
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Referer': 'https://www.melon.com',
+  'Referer': 'https://music.bugs.co.kr',
   'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8',
 };
 
@@ -27,33 +27,38 @@ let chartCache = null;
 let chartCachedAt = 0;
 const CACHE_TTL = 5 * 60 * 1000;
 
-async function fetchMelon() {
-  const r = await axios.get('https://www.melon.com/chart/index.htm', {
+async function fetchBugsWeekly() {
+  const r = await axios.get('https://music.bugs.co.kr/chart/track/week/total', {
     headers: HEADERS,
     timeout: 12000,
   });
   const $ = cheerio.load(r.data);
   const songs = [];
 
-  $('tr.lst50, tr.lst100').each((i, el) => {
-    const row = $(el);
-    const rank = parseInt(row.find('td .rank').first().text().trim(), 10);
+  $('table.list tbody tr').each((i, el) => {
+    const row  = $(el);
+    const rank = parseInt(row.find('div.ranking strong').text().trim(), 10);
 
-    const rankWrap = row.find('.rank_wrap');
+    const rankChangeEl = row.find('div.ranking div');
     let prevRank = rank;
-    if (rankWrap.find('.rank_up').length) {
-      prevRank = rank + (parseInt(rankWrap.find('.none').last().text().trim(), 10) || 0);
-    } else if (rankWrap.find('.rank_down').length) {
-      prevRank = rank - (parseInt(rankWrap.find('.none').last().text().trim(), 10) || 0);
-    } else if (rankWrap.find('.rank_new').length) {
+    const upMatch   = rankChangeEl.filter('.up').text().trim();
+    const downMatch = rankChangeEl.filter('.down').text().trim();
+    const isNewEntry = rankChangeEl.filter('.new').length > 0;
+    if (isNewEntry) {
       prevRank = null;
+    } else if (upMatch) {
+      prevRank = rank + (parseInt(upMatch, 10) || 0);
+    } else if (downMatch) {
+      prevRank = rank - (parseInt(downMatch, 10) || 0);
     }
 
-    const title  = row.find('.rank01 a').text().trim();
-    const artist = row.find('.rank02 a').first().text().replace(/ /g, ' ').trim();
-    const album  = row.find('.rank03 a').text().trim();
-    const cover  = row.find('td img').first().attr('src') || '';
-    const songId = row.find('input[name="input_check"]').attr('value') || '';
+    const title  = row.find('p.title a').last().text().trim();
+    const artist = row.find('p.artist a').first().text().trim();
+    const album  = row.find('a.album').first().text().trim();
+    const coverEl = row.find('td img').first();
+    const cover  = coverEl.attr('src') || coverEl.attr('data-src') || '';
+    const trackHref = row.find('a.trackInfo').first().attr('href') || '';
+    const songId = trackHref.match(/\/track\/(\d+)/)?.[1] || '';
 
     if (rank && title) {
       songs.push({ rank, prevRank, title, artist, album, cover, songId, isNew: prevRank === null });
@@ -209,32 +214,14 @@ async function preloadFromR2() {
 
 // ── Routes ──
 
-app.get('/api/cover', async (req, res) => {
-  const { url } = req.query;
-  if (!url || !url.startsWith('https://cdnimg.melon.co.kr/')) return res.status(400).end();
-  try {
-    const r = await axios.get(url, {
-      responseType: 'arraybuffer',
-      headers: { ...HEADERS },
-      timeout: 8000,
-    });
-    res.setHeader('Content-Type', r.headers['content-type'] || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.send(Buffer.from(r.data));
-  } catch (e) {
-    res.status(502).end();
-  }
-});
-
 app.get('/api/download', async (req, res) => {
-  const { title, artist, songId, cover } = req.query;
+  const { title, artist, cover } = req.query;
   if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
 
   const key = `${title}|${artist}`;
   const cached = audioCache[key];
 
-  // 오디오 URL + 썸네일 병렬로 준비
-  let audioUrl, coverUrl, lyric;
+  let audioUrl, coverUrl;
   try {
     if (cached?.videoId) {
       const info = await extractByVideoId(cached.videoId, cached);
@@ -250,40 +237,8 @@ app.get('/api/download', async (req, res) => {
     return res.status(502).json({ error: e.message });
   }
 
-  let thumbUrl;
-
-  // 멜론 songId가 있을 때만 멜론 썸네일/가사 fetch, cover 파라미터가 있으면(벅스) 멜론 검색으로 가사만 가져옴
-  const [melonCover, melonLyric] = await Promise.allSettled([
-    (!cover && songId) ? axios.get(`https://www.melon.com/song/detail.htm?songId=${songId}`, { headers: HEADERS, timeout: 5000 })
-      .then(r => {
-        const match = r.data.match(/cdnimg[^"']*_500\.jpg/);
-        return match ? `https://${match[0]}` : null;
-      }) : Promise.resolve(null),
-    (!cover && songId) ? axios.get('https://www.melon.com/song/lyricInfo.json', {
-      params: { songId },
-      headers: { ...HEADERS, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}` },
-      timeout: 5000,
-    }).then(r => r.data?.lyric?.replace(/<BR>/gi, '\n') || null)
-    : cover ? axios.get('https://www.melon.com/search/song/index.htm', {
-        params: { q: `${title} ${artist}` },
-        headers: HEADERS,
-        timeout: 10000,
-      }).then(async r => {
-        const $s = cheerio.load(r.data);
-        let sid = null;
-        $s('tbody tr').each((i, el) => { if (!sid) { const v = $s(el).find('input[name="input_check"]').attr('value'); if (v) sid = v; } });
-        if (!sid) return null;
-        const lr = await axios.get('https://www.melon.com/song/lyricInfo.json', {
-          params: { songId: sid },
-          headers: { ...HEADERS, 'X-Requested-With': 'XMLHttpRequest', 'Referer': `https://www.melon.com/song/detail.htm?songId=${sid}` },
-          timeout: 8000,
-        });
-        return lr.data?.lyric?.replace(/<BR>/gi, '\n') || null;
-      }) : Promise.resolve(null),
-  ]);
-
-  thumbUrl = cover || melonCover.value || coverUrl;
-  lyric = melonLyric.value || '';
+  const thumbUrl = cover || coverUrl;
+  const lyric = await fetchLyric(title, artist);
 
   // 썸네일을 임시 파일로 저장
   let thumbPath = null;
@@ -342,13 +297,11 @@ app.get('/api/download', async (req, res) => {
   req.on('close', () => ff.kill());
 });
 
-app.get('/api/bugs-lyrics', async (req, res) => {
-  const { title, artist } = req.query;
-  if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
+async function fetchLyric(title, artist) {
   try {
     const searchRes = await axios.get('https://www.melon.com/search/song/index.htm', {
       params: { q: `${title} ${artist}` },
-      headers: HEADERS,
+      headers: { ...HEADERS, 'Referer': 'https://www.melon.com' },
       timeout: 10000,
     });
     const $s = cheerio.load(searchRes.data);
@@ -358,56 +311,43 @@ app.get('/api/bugs-lyrics', async (req, res) => {
       const id = $s(el).find('input[name="input_check"]').attr('value');
       if (id) songId = id;
     });
-    if (!songId) return res.json({ lyric: null });
-
+    if (!songId) return null;
     const lyricRes = await axios.get('https://www.melon.com/song/lyricInfo.json', {
       params: { songId },
       headers: {
         ...HEADERS,
+        'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}`,
         'X-Requested-With': 'XMLHttpRequest',
         'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}`,
       },
       timeout: 8000,
     });
-    res.json({ lyric: lyricRes.data?.lyric || null });
+    return lyricRes.data?.lyric?.replace(/<BR>/gi, '\n') || null;
   } catch (e) {
-    console.error('[bugs-lyrics]', e.message);
-    res.status(502).json({ error: e.message });
+    console.warn('[fetchLyric]', e.message);
+    return null;
   }
-});
+}
 
 app.get('/api/lyrics', async (req, res) => {
-  const { songId } = req.query;
-  if (!songId) return res.status(400).json({ error: 'songId 필요' });
+  const { title, artist } = req.query;
+  if (!title || !artist) return res.status(400).json({ error: 'title, artist 필요' });
   try {
-    const r = await axios.get('https://www.melon.com/song/lyricInfo.json', {
-      params: { songId },
-      headers: {
-        ...HEADERS,
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json, text/javascript, */*; q=0.01',
-        'Referer': `https://www.melon.com/song/detail.htm?songId=${songId}`,
-      },
-      timeout: 8000,
-    });
-    const lyric = r.data?.lyric || null;
-    res.json({ lyric });
+    res.json({ lyric: await fetchLyric(title, artist) });
   } catch (e) {
-    console.error('[lyrics]', e.message);
     res.status(502).json({ error: e.message });
   }
 });
 
 app.get('/api/chart', async (req, res) => {
-  if (chartCache && Date.now() - chartCachedAt < CACHE_TTL) {
+  const bust = req.query.bust === '1';
+  if (!bust && chartCache && Date.now() - chartCachedAt < CACHE_TTL) {
     return res.json({ source: 'cache', data: chartCache });
   }
   try {
-    const data = await fetchMelon();
+    const data = await fetchBugsWeekly();
     chartCache = data;
     chartCachedAt = Date.now();
-    r2.saveChart('melon', data).catch(e => console.error('[R2 saveChart]', e.message));
     enqueueMatch(data);
     res.json({ source: 'live', data });
   } catch (e) {
@@ -538,26 +478,6 @@ app.get('/api/match-status', (req, res) => {
   });
 });
 
-app.get('/api/history', async (req, res) => {
-  try {
-    res.json({ dates: await r2.listDates('melon') });
-  } catch (e) {
-    res.status(502).json({ error: e.message });
-  }
-});
-
-app.get('/api/history/:date', async (req, res) => {
-  try {
-    const [chart, ytMatches] = await Promise.all([
-      r2.getChart(req.params.date, 'melon'),
-      r2.getYtMatches(req.params.date),
-    ]);
-    if (!chart) return res.status(404).json({ error: '해당 날짜 데이터 없음' });
-    res.json({ date: req.params.date, chart, ytMatches });
-  } catch (e) {
-    res.status(502).json({ error: e.message });
-  }
-});
 
 const PORT = 3000;
 app.listen(PORT, () => {

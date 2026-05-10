@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const s3 = new S3Client({
   region: 'auto',
@@ -14,19 +14,6 @@ const BUCKET = process.env.R2_BUCKET;
 
 function today() {
   return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
-}
-
-// 차트 스냅샷 저장: charts/YYYY-MM-DD/melon.json
-async function saveChart(chartId, songs) {
-  const key  = `charts/${today()}/${chartId}.json`;
-  const body = JSON.stringify({ savedAt: new Date().toISOString(), songs }, null, 2);
-  await s3.send(new PutObjectCommand({
-    Bucket:      BUCKET,
-    Key:         key,
-    Body:        body,
-    ContentType: 'application/json',
-  }));
-  console.log(`[R2] saved ${key}`);
 }
 
 // 유튜브 매칭 정보 저장/업데이트: yt-matches/YYYY-MM-DD.json
@@ -66,41 +53,6 @@ async function saveYtMatch(title, artist, info) {
   }
 }
 
-// 특정 날짜 차트 조회
-async function getChart(date, chartId) {
-  const key = `charts/${date}/${chartId}.json`;
-  try {
-    const res  = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
-    const text = await streamToString(res.Body);
-    return JSON.parse(text);
-  } catch (e) {
-    if (e.name === 'NoSuchKey') return null;
-    throw e;
-  }
-}
-
-// 저장된 날짜 목록 조회 (차트 기준)
-async function listDates(chartId) {
-  const res = await s3.send(new ListObjectsV2Command({
-    Bucket: BUCKET,
-    Prefix: `charts/`,
-    Delimiter: '/',
-  }));
-  // CommonPrefixes: [ { Prefix: 'charts/2026-05-09/' }, ... ]
-  const dates = (res.CommonPrefixes || [])
-    .map(p => p.Prefix.replace('charts/', '').replace('/', ''))
-    .sort((a, b) => b.localeCompare(a)); // 최신순
-
-  // chartId 파일이 실제로 존재하는 날짜만 필터
-  const checked = await Promise.all(dates.map(async date => {
-    try {
-      await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `charts/${date}/${chartId}.json` }));
-      return date;
-    } catch { return null; }
-  }));
-  return checked.filter(Boolean);
-}
-
 // 특정 날짜 YT 매칭 조회
 async function getYtMatches(date) {
   const key = `yt-matches/${date}.json`;
@@ -123,4 +75,4 @@ function streamToString(stream) {
   });
 }
 
-module.exports = { saveChart, saveYtMatch, getChart, listDates, getYtMatches, today };
+module.exports = { saveYtMatch, getYtMatches, today };
